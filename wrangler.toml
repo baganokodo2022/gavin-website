@@ -1,6 +1,6 @@
 # wrangler.toml
-name = 'gavin-website'
-compatibility_date = "2026-08-01"
+name = 'hilltop-website'
+compatibility_date = "2026-08-02"
 
 [assets]
 directory = "dist"
@@ -8,5 +8,5 @@ directory = "dist"
 # Your D1 Database Binding
 [[d1_databases]]
 binding = "DB"
-database_name = "gavin_website"
-database_id = "99542bae-9e11-4c53-b547-86f60a9e863d"
+database_name = "hilltop_website"
+database_id = "34e53829-3931-4d4b-9ba7-abac636d1671"

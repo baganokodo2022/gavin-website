@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'; // Ensure useRef is imported at the top!
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import { Turnstile } from '@marsidev/react-turnstile';
 import { Editor } from '@tinymce/tinymce-react';
@@ -21,43 +21,20 @@ const staffData = [
   { id: 'rubbi', name: 'Rubbi Chen', pronouns: 'She/Her', grade: 'Senior', role: 'International Representative (China)', shortBio: 'Fostering literary connections across international borders.', fullBio: 'Full biography coming soon...' },
 ];
 
-function EditorInit({ value, onChange }) {
-  const editorRef = useRef(null);
-
-  // 1. Initialize the editor
-  useEffect(() => {
-    if (window.tinymce) {
-      window.tinymce.init({
-        selector: '#my-expressive-editor',
-        height: 400,
-        menubar: false,
-        plugins: ['lists', 'link', 'image', 'code', 'table'],
-        toolbar: 'undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | code',
-        setup: (editor) => {
-          editorRef.current = editor;
-          editor.on('Change KeyUp', () => {
-            onChange(editor.getContent());
-          });
-        }
-      });
-    }
-
-    return () => {
-      if (window.tinymce) {
-        window.tinymce.remove('#my-expressive-editor');
-      }
-    };
-  }, []); // Only runs once on mount
-
-  // 2. NEW: Watch for external changes (like picking an older issue from a dropdown)
-  useEffect(() => {
-    if (editorRef.current && value !== editorRef.current.getContent()) {
-      editorRef.current.setContent(value || '');
-    }
-  }, [value]);
-
-  return null;
-}
+const TINYMCE_INIT = {
+  height: 400,
+  menubar: false,
+  plugins: [
+    'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+    'searchreplace', 'visualblocks', 'code', 'fullscreen',
+    'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount'
+  ],
+  toolbar: 'undo redo | formatselect | ' +
+    'bold italic backcolor | alignleft aligncenter ' +
+    'alignright alignjustify | bullist numlist outdent indent | ' +
+    'removeformat | help',
+  content_style: 'body { font-family:Lora,Georgia,serif; font-size:16px }',
+};
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
@@ -80,6 +57,12 @@ export default function App() {
   const [newAnnouncement, setNewAnnouncement] = useState('');
   const [editingIssueId, setEditingIssueId] = useState('new'); // <-- Add this new line
 
+  // Admin edit existing issue
+  const [adminMode, setAdminMode] = useState('publish');
+  const [editingIssueId, setEditingIssueId] = useState('');
+  const [editIssueTitle, setEditIssueTitle] = useState('');
+  const [editIssueHtml, setEditIssueHtml] = useState('');
+
   // --- New State for Dynamic Content ---
   const [currentIssue, setCurrentIssue] = useState(null);
   const [pastIssues, setPastIssues] = useState([]);
@@ -87,26 +70,43 @@ export default function App() {
   const [announcement, setAnnouncement] = useState('');
   const [isContentLoading, setIsContentLoading] = useState(true);
 
+  async function refreshSiteContent() {
+    try {
+      const res = await fetch('/api/content');
+      const data = await res.json();
+      if (data.success) {
+        setCurrentIssue(data.currentIssue);
+        setPastIssues(data.pastIssues || []);
+        if (data.announcement) setAnnouncement(data.announcement.message);
+      }
+      return data;
+    } catch (err) {
+      console.error('Failed to fetch site content:', err);
+      return null;
+    }
+  }
+
   // Fetch content on page load
   useEffect(() => {
-    async function fetchContent() {
-      try {
-        const res = await fetch('/api/content');
-        const data = await res.json();
-        console.log("API Data Loaded:", data); // Add this line!
-        if (data.success) {
-          setCurrentIssue(data.currentIssue);
-          setPastIssues(data.pastIssues || []);
-          if (data.announcement) setAnnouncement(data.announcement.message);
-        }
-      } catch (err) {
-        console.error("Failed to fetch site content:", err);
-      } finally {
-        setIsContentLoading(false);
-      }
+    async function loadContent() {
+      await refreshSiteContent();
+      setIsContentLoading(false);
     }
-    fetchContent();
+    loadContent();
   }, []);
+
+  const allIssuesForAdmin = [
+    ...(currentIssue ? [{ ...currentIssue, isCurrent: true }] : []),
+    ...(pastIssues || []).map((issue) => ({ ...issue, isCurrent: false })),
+  ];
+
+  function handleSelectIssueToEdit(issueId) {
+    const issue = allIssuesForAdmin.find((i) => i.id === issueId);
+    if (!issue) return;
+    setEditingIssueId(issue.id);
+    setEditIssueTitle(issue.title);
+    setEditIssueHtml(issue.content_html);
+  }
 
   const handleStaffClick = (staff) => {
     setSelectedStaff(staff);
@@ -119,8 +119,8 @@ export default function App() {
       <header className="site-header">
         <div className="container">
           <a href="#" className="logo-container" onClick={() => setActiveTab('home')}>
-            <img src="/inkandstain_icon.png" alt="Ink & Stain Logo" className="logo-icon" />
-            <h1 className="site-title">Ink & Stain</h1>
+            <img src="/inkandstain_icon.png" alt="The Hilltop Horizon Review Logo" className="logo-icon" />
+            <h1 className="site-title">The Hilltop Horizon Review</h1>
             <p className="site-subtitle">an international youth literary magazine</p>
           </a>
         </div>
@@ -510,7 +510,7 @@ Red upon white cloth`}
               </div>
               <div style={{ margin: '20px 0', display: 'flex', justifyContent: 'center' }}>
                 <Turnstile 
-                  siteKey="0x4AAAAAAEEHPVvPPOVCCORz" 
+                  siteKey="0x4AAAAAAEEsA5qQZtd99Uc8" 
                   onSuccess={(token) => setSubCaptchaToken(token)} 
                 />
               </div>
@@ -641,6 +641,35 @@ Red upon white cloth`}
                 <button type="submit" className="btn-primary" style={{ marginTop: '10px' }}>Login</button>
               </form>
             ) : (
+              <div>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '25px' }}>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => setAdminMode('publish')}
+                    style={{
+                      backgroundColor: adminMode === 'publish' ? 'var(--text-main)' : 'transparent',
+                      color: adminMode === 'publish' ? 'var(--bg-main)' : 'var(--text-main)',
+                      border: '1px solid var(--text-main)',
+                    }}
+                  >
+                    Publish New Issue
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => setAdminMode('edit')}
+                    style={{
+                      backgroundColor: adminMode === 'edit' ? 'var(--text-main)' : 'transparent',
+                      color: adminMode === 'edit' ? 'var(--bg-main)' : 'var(--text-main)',
+                      border: '1px solid var(--text-main)',
+                    }}
+                  >
+                    Edit Existing Issue
+                  </button>
+                </div>
+
+                {adminMode === 'publish' ? (
               <form onSubmit={async (e) => {
                 e.preventDefault();
                 
@@ -667,6 +696,12 @@ Red upon white cloth`}
                     alert('Failed to publish.');
                   }
 
+                if (res.ok) {
+                  alert('Issue published and emails sent successfully!');
+                  setNewIssueTitle('');
+                  setNewIssueHtml('');
+                  setNewAnnouncement('');
+                  await refreshSiteContent();
                 // BRANCH B: Edit Existing Issue
                 } else {
                   if (!confirm('Are you sure you want to save changes to this existing issue? (No emails will be sent)')) return;
@@ -744,23 +779,10 @@ Red upon white cloth`}
                   </p>
                   
                   <Editor
-                    apiKey='jhc05j47yf1ne408wtb8i3c6380mgcoqiayxub89shoy1r77' 
+                    apiKey='vi6do892krmboei0izctd0jz9q98379bnrr3h3g7fcejsi5h'
                     value={newIssueHtml}
                     onEditorChange={(content) => setNewIssueHtml(content)}
-                    init={{
-                      height: 400,
-                      menubar: false,
-                      plugins: [
-                        'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
-                        'searchreplace', 'visualblocks', 'code', 'fullscreen',
-                        'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount'
-                      ],
-                      toolbar: 'undo redo | formatselect | ' +
-                        'bold italic backcolor | alignleft aligncenter ' +
-                        'alignright alignjustify | bullist numlist outdent indent | ' +
-                        'removeformat | help',
-                      content_style: 'body { font-family:Lora,Georgia,serif; font-size:16px }'
-                    }}
+                    init={TINYMCE_INIT}
                   />
                 </div>
 
@@ -768,6 +790,100 @@ Red upon white cloth`}
                   {editingIssueId === 'new' ? 'Publish Issue & Broadcast Email' : 'Save Changes (Silent)'}
                 </button>
               </form>
+                ) : (
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                if (!editingIssueId) {
+                  alert('Please select an issue to edit.');
+                  return;
+                }
+
+                const res = await fetch('/api/admin/update-issue', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    issueId: editingIssueId,
+                    title: editIssueTitle,
+                    contentHtml: editIssueHtml,
+                  }),
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                  alert('Issue updated successfully.');
+                  const refreshed = await refreshSiteContent();
+                  if (refreshed?.success && selectedIssue?.id === editingIssueId) {
+                    const updated = [
+                      ...(refreshed.currentIssue ? [refreshed.currentIssue] : []),
+                      ...(refreshed.pastIssues || []),
+                    ].find((i) => i.id === editingIssueId);
+                    if (updated) setSelectedIssue(updated);
+                  }
+                } else {
+                  alert(`Failed to save: ${data.error || 'Unknown error'}`);
+                }
+              }}>
+                <div className="form-group">
+                  <label>Select Issue to Edit</label>
+                  {allIssuesForAdmin.length === 0 ? (
+                    <p style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>No published issues yet.</p>
+                  ) : (
+                    <select
+                      className="form-control"
+                      value={editingIssueId}
+                      onChange={(e) => handleSelectIssueToEdit(e.target.value)}
+                      required
+                    >
+                      <option value="">— Choose an issue —</option>
+                      {allIssuesForAdmin.map((issue) => (
+                        <option key={issue.id} value={issue.id}>
+                          {issue.title}
+                          {issue.isCurrent ? ' (Current)' : ''}
+                          {!issue.isCurrent && issue.published_at
+                            ? ` — ${new Date(issue.published_at).toLocaleDateString()}`
+                            : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {editingIssueId && (
+                  <>
+                    <div className="form-group">
+                      <label>Issue Title</label>
+                      <input
+                        type="text"
+                        value={editIssueTitle}
+                        onChange={(e) => setEditIssueTitle(e.target.value)}
+                        className="form-control"
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Issue Content (WYSIWYG Editor)</label>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '10px' }}>
+                        Fix typos or formatting below. Saving will not email subscribers.
+                      </p>
+
+                      <Editor
+                        key={editingIssueId}
+                        apiKey='vi6do892krmboei0izctd0jz9q98379bnrr3h3g7fcejsi5h'
+                        value={editIssueHtml}
+                        onEditorChange={(content) => setEditIssueHtml(content)}
+                        init={TINYMCE_INIT}
+                      />
+                    </div>
+
+                    <button type="submit" className="btn-primary" style={{ marginTop: '15px' }}>
+                      Save Changes
+                    </button>
+                  </>
+                )}
+              </form>
+                )}
+              </div>
             )}
           </div>
         )}

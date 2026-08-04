@@ -1,13 +1,9 @@
+import { requireAdmin } from '../../lib/admin-auth.js';
+
 export async function onRequestPost(context) {
-    // 1. Verify Admin Session Cookie
-    const cookieHeader = context.request.headers.get('Cookie') || '';
-    const match = cookieHeader.match(/admin_token=([^;]+)/);
-    if (!match) return new Response('Unauthorized', { status: 401 });
-  
-    const token = match[1];
-    const session = await context.env.DB.prepare('SELECT * FROM admin_sessions WHERE token = ? AND expires_at > CURRENT_TIMESTAMP').bind(token).first();
-    if (!session) return new Response('Invalid or expired session', { status: 401 });
-  
+    const auth = await requireAdmin(context);
+    if (auth.error) return auth.error;
+
     const { title, contentHtml, announcementMessage } = await context.request.json();
   
     // 2. Database Transaction: Archive old, insert new issue & announcement
@@ -38,8 +34,8 @@ export async function onRequestPost(context) {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          from: 'Ink & Stain <noreply@inkandstainlit.com>',
-          to: 'baganokodo2022@gmail.com',
+          from: 'The Hilltop Horizon Review <noreply@thehilltophorizonreview.com>',
+          to: 'gavinliu20162025@gmail.com',
           bcc: emailList, // Use BCC to protect subscriber privacy
           subject: `New Issue Published: ${title}`,
           html: `<h2>The wait is over!</h2><p>${title} is now live on our website.</p><p><a href="https://yourwebsite.com">Read it now</a></p>`
