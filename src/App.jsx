@@ -119,8 +119,8 @@ export default function App() {
       <header className="site-header">
         <div className="container">
           <a href="#" className="logo-container" onClick={() => setActiveTab('home')}>
-            <img src="/inkandstain_icon.png" alt="Ink & Stain Logo" className="logo-icon" />
-            <h1 className="site-title">Ink & Stain</h1>
+            <img src="/inkandstain_icon.png" alt="The Hilltop Horizon Review Logo" className="logo-icon" />
+            <h1 className="site-title">The Hilltop Horizon Review</h1>
             <p className="site-subtitle">an international youth literary magazine</p>
           </a>
         </div>
